@@ -148,48 +148,48 @@ fusing hot paths into single exports would help more. Plenty of headroom here.
 bun test
 ```
 
-23 tests across 4 files. Gradients are checked numerically (d/dx x² at x=3 is
-6; ∂/∂w Σ(w·x) is x), not just for shape. Save/load asserts identical model
-output after a round-trip.
+Expected output:
 
-Tests should show show similar to below:
-
-bun test v1.3.14 (0d9b296a)
-
-tests/candle_optimizers.test.ts:
-✓ optimizers > adamw moves params downhill [9.93ms]
-✓ optimizers > adamw trains XOR faster than raw SGD [357.37ms]
-✓ optimizers > sgd optimizer object works too [2546.79ms]
-✓ optimizers > setLr changes the step size [0.86ms]
-✓ optimizers > weight decay shrinks weights toward zero [22.12ms]
-✓ optimizers > adamw with no grads is a no-op, not a crash [0.28ms]
-
-tests/candle_layers.test.ts:
-✓ layers > linear output shape [0.48ms]
-✓ layers > linear_no_bias also works [0.28ms]
-✓ layers > embedding looks up rows [0.43ms]
-✓ layers > embedding is trainable [0.17ms]
-✓ layers > XOR with linear layers [2536.64ms]
-✓ layers > varmapSgdStep updates all 4 params [1.06ms]
-✓ layers > save/load round-trips weights [0.86ms]
+```
+bun test v1.3.14
 
 tests/candle_core.test.ts:
-✓ candle > hello/add [0.07ms]
-✓ candle > round-trips [0.22ms]
-✓ candle > add [0.13ms]
-✓ candle > matmul [0.30ms]
-✓ candle > dot [0.06ms]
-✓ candle > throws on bad matmul [0.11ms]
+✓ candle > hello/add
+✓ candle > round-trips
+✓ candle > add
+✓ candle > matmul
+✓ candle > dot
+✓ candle > throws on bad matmul
 
 tests/candle_simple_network.test.ts:
-✓ autograd > d/dx x^2 at x=3 is 6 [0.11ms]
-✓ autograd > grad of sum(w * x) wrt w is x [0.08ms]
-✓ autograd > sgdStep moves params downhill [0.12ms]
-Loss: 0.000
-✓ autograd > trains an MLP on XOR [2525.37ms]
+✓ autograd > d/dx x^2 at x=3 is 6
+✓ autograd > grad of sum(w * x) wrt w is x
+✓ autograd > sgdStep moves params downhill
+✓ autograd > trains an MLP on XOR
+
+tests/candle_layers.test.ts:
+✓ layers > linear output shape
+✓ layers > linear_no_bias also works
+✓ layers > embedding looks up rows
+✓ layers > embedding is trainable
+✓ layers > XOR with linear layers
+✓ layers > varmapSgdStep updates all 4 params
+✓ layers > save/load round-trips weights
+
+tests/candle_optimizers.test.ts:
+✓ optimizers > adamw moves params downhill
+✓ optimizers > adamw trains XOR faster than raw SGD
+✓ optimizers > sgd optimizer object works too
+✓ optimizers > setLr changes the step size
+✓ optimizers > weight decay shrinks weights toward zero
+✓ optimizers > adamw with no grads is a no-op, not a crash
 
  23 pass
  0 fail
- 30 expect() calls
+```
+
+Gradients are checked numerically (d/dx x² at x=3 is 6; ∂/∂w Σ(w·x) is x),
+not just for shape. Save/load asserts identical model output after a
+round-trip.
 Ran 23 tests across 4 files. [8.08s]
 
