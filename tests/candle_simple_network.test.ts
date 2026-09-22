@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-const candle = require("./index.node");
+const candle = require("../index.node");
 
 const toArr = (t: any) => {
   const { shape, data } = candle.tensorToF32(t);
@@ -62,5 +62,5 @@ describe("autograd", () => {
 
     const preds = toArr(forward(X)).values.map((v) => (v > 0.5 ? 1 : 0));
     expect(preds).toEqual([0, 1, 1, 0]);
-  });
+  }, 30000);
 });

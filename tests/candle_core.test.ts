@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-const candle = require('./index.node')
+const candle = require('../index.node')
 
 const toArr = (t: any) => {
   const { shape, data } = candle.tensorToF32(t);
@@ -17,6 +17,10 @@ describe("candle", () => {
     expect(candle.tensorShape(t)).toEqual([2, 3]);
     expect(toArr(t)).toEqual({ shape: [2, 3], values: [1, 2, 3, 4, 5, 6] });
   });
+
+
+
+
 
   test("add", () => {
     const a = candle.tensorFromF32(new Float32Array([1, 2, 3, 4]), [2, 2]);

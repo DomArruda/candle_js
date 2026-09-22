@@ -1,0 +1,38 @@
+{
+  "name": "candle_js",
+  "version": "0.1.0",
+  "description": "PyTorch-like neural networks in JavaScript/TypeScript, backed by candle in Rust.",
+  "main": "lib/index.ts",
+  "types": "lib/index.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.ts",
+      "import": "./lib/index.ts",
+      "require": "./lib/index.ts"
+    }
+  },
+  "files": [
+    "lib",
+    "index.node",
+    "src",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "bench": "bun test tests/benchmark.test.ts",
+    "build": "cargo build --release && cp target/release/libcandle_js.so index.node",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "tensor",
+    "autograd",
+    "neural-network",
+    "transformer",
+    "candle",
+    "rust",
+    "wasm"
+  ],
+  "license": "MIT"
+}
