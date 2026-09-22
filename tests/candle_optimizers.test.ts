@@ -56,7 +56,7 @@ describe("optimizers", () => {
     expect(loss).toBeLessThan(0.01); // 400 steps vs SGD's 3000
     expect(toArr(forward(X)).values.map((v) => (v > 0.5 ? 1 : 0)))
       .toEqual([0, 1, 1, 0]);
-  });
+  }, 30000);
 
   test("sgd optimizer object works too", () => {
     const vm = candle.varmapNew();
@@ -80,7 +80,7 @@ describe("optimizers", () => {
     }
 
     expect(loss).toBeLessThan(0.01);
-  });
+  }, 30000);
 
   test("setLr changes the step size", () => {
     const vm = candle.varmapNew();

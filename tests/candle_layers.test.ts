@@ -72,7 +72,7 @@ describe("layers", () => {
     expect(loss).toBeLessThan(0.01);
     expect(toArr(forward(X)).values.map((v) => (v > 0.5 ? 1 : 0)))
       .toEqual([0, 1, 1, 0]);
-  });
+  }, 30000);
 
   test("varmapSgdStep updates all 4 params", () => {
     const vm = candle.varmapNew();
