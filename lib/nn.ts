@@ -2,6 +2,16 @@ import { native } from "./native";
 import { Tensor, Var, unwrap, type ShapeLike, toShape } from "./tensor";
 import { VarMap } from "./varmap";
 import * as F from "./ops";
+import {
+  evaluate as evaluateModel,
+  fit as fitModel,
+  predict as predictModel,
+  type EpochLogs,
+  type EvaluateConfig,
+  type FitConfig,
+  type FitData,
+  type History,
+} from "./highlevel";
 
 /** @internal Join a module path with a child name. */
 function joinPrefix(prefix: string, name: string): string {
@@ -85,6 +95,36 @@ export abstract class Module {
   parameters(): Var[] {
     this.ensureBuilt();
     return [...this._params, ...this._children.flatMap((c) => c.parameters())];
+  }
+
+  /** Total number of scalar parameters. */
+  get numParameters(): number {
+    return this.parameters().reduce((n, p) => n + p.numel, 0);
+  }
+
+  /**
+   * High-level supervised training loop. See {@link fit} for options.
+   *
+   * @example
+   * ```ts
+   * model.fit(
+   *   { x: X, y: labels },
+   *   { epochs: 20, batchSize: 32, validationSplit: 0.2 },
+   * );
+   * ```
+   */
+  fit(data: FitData, config?: FitConfig): History {
+    return fitModel(this, data, config);
+  }
+
+  /** Score a dataset without updating parameters. See {@link evaluate}. */
+  evaluate(data: FitData, config?: EvaluateConfig): EpochLogs {
+    return evaluateModel(this, data, config);
+  }
+
+  /** Run the model with dropout disabled and return a detached tensor. */
+  predict(x: Tensor): Tensor {
+    return predictModel(this, x);
   }
 
   /**
@@ -200,13 +240,20 @@ export class Embedding extends Module {
   }
 
   /**
-   * @param ids - Token ids.
-   * @param shape - Shape of `ids` (defaults to `[ids.length]`); the output is
-   *   `[...shape, embeddingDim]`.
+   * @param ids - Token ids as a `u32` tensor, a `Uint32Array` or a `number[]`.
+   * @param shape - Shape of `ids`; inferred when `ids` is a tensor.
    */
-  protected _forward(ids: Uint32Array | number[], shape?: ShapeLike): Tensor {
-    const arr = ids instanceof Uint32Array ? ids : new Uint32Array(ids);
-    const s = shape === undefined ? [arr.length] : toShape(shape);
+  protected _forward(ids: Uint32Array | number[] | Tensor, shape?: ShapeLike): Tensor {
+    const arr = ids instanceof Tensor
+      ? ids.toUint32Array()
+      : ids instanceof Uint32Array
+        ? ids
+        : new Uint32Array(ids);
+    const s = ids instanceof Tensor
+      ? ids.shape
+      : shape === undefined
+        ? [arr.length]
+        : toShape(shape);
     return new Tensor(native.embeddingForward(this._layer, arr, s));
   }
 }

@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f5f1">
+  <title>Laya · Local decision demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f3f5f6;
+      --panel: #fff;
+      --ink: #222a2f;
+      --muted: #68737a;
+      --line: #dce2e5;
+      --green: #466777;
+      --orange: #9b7049;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main { width: min(100% - 40px, 900px); margin: 0 auto; padding: 28px 0 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    .brand-name { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+    .brand-divider { color: #a4adb2; }
+    .runtime { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #b0aea5; }
+    .dot.ready { background: #5f9569; box-shadow: 0 0 0 3px #5f956922; }
+    .intro { margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 24px; font-weight: 620; letter-spacing: -.025em; line-height: 1.25; }
+    .lede { max-width: 720px; margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .card { overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    form { padding: 22px; }
+    .field { margin-bottom: 19px; }
+    .field[hidden] { display: none; }
+    label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 650; }
+    .state-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .state-head label { margin: 0; }
+    select { height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--ink); font: inherit; font-size: 11px; }
+    textarea, input {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px; outline: none; background: #fff;
+      color: var(--ink); font: inherit; font-size: 13px; transition: border-color .15s, box-shadow .15s;
+    }
+    textarea { min-height: 116px; padding: 12px 13px; line-height: 1.55; resize: vertical; }
+    textarea.json { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    #requestJson { min-height: 270px; }
+    input { height: 42px; padding: 0 13px; }
+    textarea:focus, input:focus { border-color: #849d87; box-shadow: 0 0 0 3px #486b5214; }
+    .hint { margin: 7px 0 0; color: var(--muted); font-size: 11px; }
+    .row { display: grid; grid-template-columns: 1.3fr .85fr 1fr; gap: 16px; }
+    .actions { display: flex; align-items: center; gap: 12px; margin-top: 23px; }
+    button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--green); color: white; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s; }
+    button:hover:not(:disabled) { background: #385563; }
+    button:disabled { cursor: not-allowed; opacity: .48; }
+    button.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+    button.secondary:hover:not(:disabled) { background: #f3f5f6; }
+    .status { color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .download-progress { display: grid; gap: 7px; margin-top: 12px; }
+    .download-progress[hidden] { display: none; }
+    .progress-label { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+    .progress-track { height: 5px; overflow: hidden; border-radius: 9px; background: #eeede7; }
+    .progress-track i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--orange); transition: width .12s linear; }
+    .result { display: none; border-top: 1px solid var(--line); padding: 20px 24px 23px; }
+    .result.visible { display: block; }
+    .result-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
+    .result-head strong { font-size: 18px; font-weight: 600; }
+    .result-head span { color: var(--muted); font-size: 11px; }
+    .option { display: grid; grid-template-columns: 88px 1fr 44px; align-items: center; gap: 11px; margin-top: 10px; font-size: 12px; }
+    .bar { height: 6px; overflow: hidden; border-radius: 9px; background: #eeede7; }
+    .bar i { display: block; height: 100%; border-radius: inherit; background: var(--green); transition: width .35s ease; }
+    .option b { text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
+    footer { display: flex; justify-content: space-between; gap: 18px; margin-top: 12px; color: var(--muted); font-size: 10px; line-height: 1.55; }
+    footer a { color: inherit; text-underline-offset: 3px; }
+    @media (max-width: 560px) {
+      main { width: min(100% - 28px, 900px); padding-top: 18px; }
+      header { margin-bottom: 22px; }
+      form { padding: 18px; }
+      .row { grid-template-columns: 1fr; gap: 0; }
+      .actions { align-items: flex-start; flex-direction: column; }
+      .actions button { width: 100%; }
+      .result { padding: 18px; }
+      footer { flex-direction: column; gap: 5px; }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand"><span class="brand-name">LAYA</span><span class="brand-divider">/</span><span>browser inference</span></div>
+      <div class="runtime"><span class="dot" id="runtimeDot"></span><span id="runtimeLabel">not loaded</span></div>
+    </header>
+
+    <section class="intro">
+      <h1>Laya inference</h1>
+      <p class="lede">Choice, score, and yes/no decisions using the int8 ONNX model. Inputs are processed in this browser; model weights download on demand and are cached when storage allows.</p>
+    </section>
+
+    <section class="card" aria-label="Laya decision demo">
+      <form id="decisionForm">
+        <div class="state-head">
+          <label for="inputMode">Input mode</label>
+          <select id="inputMode"><option value="form">Form</option><option value="json">JSON</option></select>
+        </div>
+        <div id="formFields">
+        <div class="field">
+          <div class="state-head">
+            <label for="state">State</label>
+            <select id="stateFormat" aria-label="State format"><option value="text">Text</option><option value="json">JSON</option></select>
+          </div>
+          <textarea id="state">The database disk is full and writes are failing. This is blocking checkout for every customer.</textarea>
+          <p class="hint" id="stateHint">Switch modes to wrap prose as JSON or serialize a JSON value as text.</p>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="question">Question</label>
+            <input id="question" value="Is this an urgent production blocker?">
+          </div>
+          <div class="field">
+            <label for="decisionType">Decision type</label>
+            <select id="decisionType">
+              <option value="choice">Choice</option>
+              <option value="score">Score</option>
+              <option value="noul">Yes / no (noul)</option>
+            </select>
+            <p class="hint" id="typeHint">Select the best option from the list.</p>
+          </div>
+          <div class="field" id="criteriaField">
+            <label for="criteria" id="criteriaLabel">Choices</label>
+            <input id="criteria" value="routine, urgent">
+            <p class="hint" id="criteriaHint">Separate with commas; use label: description when needed.</p>
+          </div>
+        </div>
+        </div>
+        <div class="field" id="requestField" hidden>
+          <label for="requestJson">Request JSON</label>
+          <textarea id="requestJson" class="json" spellcheck="false" aria-describedby="requestHint" placeholder='{
+  "state": "...",
+  "questions": {
+    "decision": {
+      "type": "choice",
+      "instructions": "...",
+      "criteria": ["option A", "option B"]
+    }
+  }
+}'></textarea>
+          <p class="hint" id="requestHint">Request format: state plus one question under questions. Types: choice, score, noul.</p>
+        </div>
+        <div class="actions">
+          <button class="secondary" type="button" id="loadButton">Load model · 581 MB</button>
+          <button type="submit" id="analyzeButton" disabled>Choose an option</button>
+          <span class="status" id="status" role="status">Weights are cached in this browser after the first download.</span>
+        </div>
+        <div class="download-progress" id="downloadProgress" hidden>
+          <span class="progress-label" id="progressLabel"></span>
+          <div class="progress-track" id="progressTrack" role="progressbar" aria-label="Model download" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progressFill"></i></div>
+        </div>
+      </form>
+      <section class="result" id="result" aria-live="polite">
+        <div class="result-head"><strong id="winner"></strong><span id="timing"></span></div>
+        <div id="scores"></div>
+      </section>
+    </section>
+
+    <footer>
+      <span>Mattepiu/laya-onnx · int8 · Apache-2.0 · ONNX Runtime Web</span>
+      <span>Evaluate outputs on your data before relying on them.</span>
+    </footer>
+  </main>
+
+  <script type="module">
+    import { AutoTokenizer, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.2";
+
+    const REVISION = "a7f385bd51d35f5cbeb88e8bc4f0c7e7c0f24c44";
+    const REPO = "Mattepiu/laya-onnx";
+    const MODEL_URL = `https://huggingface.co/${REPO}/resolve/${REVISION}/int8/laya_int8.onnx`;
+    const CACHE_NAME = "laya-onnx-weights-v1";
+    const MODEL_BYTES = 581105897;
+    const CLS = 50281;
+    const SEP = 50282;
+    const MASK = 50284;
+    const $ = (id) => document.getElementById(id);
+    let tokenizer;
+    let session;
+
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    window.ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
+
+    function setStatus(message) {
+      $("status").textContent = message;
+    }
+
+    function updateProgress(loaded, total) {
+      const percent = Math.min(100, Math.floor(loaded / total * 100));
+      $("downloadProgress").hidden = false;
+      $("progressFill").style.width = `${percent}%`;
+      $("progressTrack").setAttribute("aria-valuenow", String(percent));
+      $("progressLabel").textContent = `Downloading weights · ${percent}% (${(loaded / 1e6).toFixed(0)} / ${(total / 1e6).toFixed(0)} MB)`;
+      setStatus("Large download in progress; keep this tab open…");
+    }
+
+    async function loadModelBytes() {
+      let cache;
+      let response;
+      if ("caches" in window) {
+        try {
+          cache = await caches.open(CACHE_NAME);
+          response = await cache.match(MODEL_URL);
+        } catch (error) {
+          console.warn("Cache API unavailable; downloading without persistent storage.", error);
+        }
+      }
+      if (response) {
+        return { bytes: new Uint8Array(await response.arrayBuffer()), stored: true };
+      }
+
+      setStatus("Downloading model weights…");
+      const download = await fetch(MODEL_URL);
+      if (!download.ok) throw new Error(`Model download failed (${download.status})`);
+      const total = Number(download.headers.get("content-length")) || MODEL_BYTES;
+      const cacheWrite = cache
+        ? cache.put(MODEL_URL, download.clone()).then(() => true).catch((error) => {
+          console.warn("Browser storage unavailable; model will need downloading again.", error);
+          return false;
+        })
+        : Promise.resolve(false);
+      const reader = download.body?.getReader();
+      if (!reader) {
+        const bytes = new Uint8Array(await download.arrayBuffer());
+        const stored = await cacheWrite;
+        $("downloadProgress").hidden = true;
+        return { bytes, stored };
+      }
+
+      let bytes = new Uint8Array(total);
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (loaded + value.length > bytes.length) {
+          const expanded = new Uint8Array(Math.max(bytes.length * 2, loaded + value.length));
+          expanded.set(bytes.subarray(0, loaded));
+          bytes = expanded;
+        }
+        bytes.set(value, loaded);
+        loaded += value.length;
+        updateProgress(loaded, total);
+      }
+      updateProgress(loaded, loaded);
+      setStatus("Saving model weights in browser storage…");
+      const stored = await cacheWrite;
+      $("downloadProgress").hidden = true;
+      return { bytes: bytes.subarray(0, loaded), stored };
+    }
+
+    $("loadButton").addEventListener("click", async () => {
+      const button = $("loadButton");
+      button.disabled = true;
+      try {
+        setStatus("Loading tokenizer…");
+        tokenizer = await AutoTokenizer.from_pretrained(REPO, { revision: REVISION });
+        const { bytes, stored } = await loadModelBytes();
+        setStatus("Preparing ONNX model in this tab…");
+        session = await window.ort.InferenceSession.create(bytes, {
+          executionProviders: ["wasm"],
+          graphOptimizationLevel: "all",
+        });
+        $("runtimeDot").classList.add("ready");
+        $("runtimeLabel").textContent = "ready · wasm";
+        $("analyzeButton").disabled = false;
+        button.textContent = "Model loaded";
+        setStatus(stored
+          ? "Weights stored in this browser. Text stays on this device."
+          : "Loaded without persistent storage. Text stays on this device.");
+      } catch (error) {
+        console.error(error);
+        button.disabled = false;
+        $("downloadProgress").hidden = true;
+        setStatus(error.message || "Could not load the model. Check your connection and browser storage.");
+      }
+    });
+
+    function setStateFormat(isJson) {
+      $("state").classList.toggle("json", isJson);
+      $("state").placeholder = isJson ? '{\n  "ticket": "...",\n  "priority": "..."\n}' : "Enter the text to evaluate…";
+      $("stateHint").textContent = isJson
+        ? "Prose is wrapped as { text }; existing JSON is formatted."
+        : "JSON objects are shown as compact serialized text.";
+    }
+
+    $("stateFormat").addEventListener("change", (event) => {
+      const isJson = event.target.value === "json";
+      const state = $("state");
+      const current = state.value;
+      if (isJson) {
+        try {
+          state.value = JSON.stringify(JSON.parse(current), null, 2);
+        } catch {
+          state.value = JSON.stringify({ text: current }, null, 2);
+        }
+      } else {
+        try {
+          const parsed = JSON.parse(current);
+          state.value = typeof parsed === "string"
+            ? parsed
+            : parsed && !Array.isArray(parsed) && Object.keys(parsed).length === 1 && typeof parsed.text === "string"
+              ? parsed.text
+              : JSON.stringify(parsed);
+        } catch {
+          state.value = current;
+          setStatus("Invalid JSON kept as text.");
+        }
+      }
+      setStateFormat(isJson);
+    });
+
+    const criteriaDefaults = {
+      choice: { label: "Choices", value: "routine, urgent", hint: "Separate with commas; use label: description when needed." },
+      score: { label: "Score levels", value: "not urgent, soon, blocking", hint: "Ordered low to high; score is the expected level starting at 0." },
+    };
+    let previousCriteriaType = "choice";
+    let noulCriteria = null;
+    let restoredCriteria = null;
+    let restoredInstructions = null;
+    let questionId = "decision";
+    $("decisionType").addEventListener("change", (event) => {
+      const decisionType = event.target.value;
+      const previousDefault = criteriaDefaults[previousCriteriaType]?.value;
+      const nextDefault = criteriaDefaults[decisionType];
+      if (previousDefault && nextDefault && $("criteria").value === previousDefault) {
+        $("criteria").value = nextDefault.value;
+      }
+      $("criteriaField").hidden = decisionType === "noul";
+      if (nextDefault) {
+        $("criteriaLabel").textContent = nextDefault.label;
+        $("criteriaHint").textContent = nextDefault.hint;
+      }
+      $("typeHint").textContent = decisionType === "score"
+        ? "Returns an expected level from 0 to N-1."
+        : decisionType === "noul" ? "Returns P(true) for the statement in your question." : "Select the best option from the list.";
+      $("analyzeButton").textContent = decisionType === "score"
+        ? "Score rubric"
+        : decisionType === "noul" ? "Evaluate yes / no" : "Choose an option";
+      if (nextDefault) previousCriteriaType = decisionType;
+      if (decisionType !== "noul") noulCriteria = null;
+      if (restoredCriteria && restoredCriteria.type !== decisionType) restoredCriteria = null;
+    });
+
+    function choiceEntries(text) {
+      return text.split(",").map((item) => item.trim()).filter(Boolean).map((item) => {
+        const colon = item.indexOf(":");
+        return colon < 0
+          ? [item, ""]
+          : [item.slice(0, colon).trim(), item.slice(colon + 1).trim()];
+      }).filter(([label]) => label);
+    }
+
+    function formRequest() {
+      const state = $("stateFormat").value === "json"
+        ? JSON.parse($("state").value)
+        : $("state").value;
+      if (typeof state === "string" && !state.trim()) throw new Error("Enter state text or a JSON value.");
+      const decisionType = $("decisionType").value;
+      const instructions = $("question").value.trim();
+      if (!instructions) throw new Error("Enter question instructions.");
+      const question = {
+        type: decisionType,
+        instructions: restoredInstructions?.snapshot === $("question").value ? restoredInstructions.value : instructions,
+      };
+      if (decisionType === "choice") {
+        const choices = choiceEntries($("criteria").value);
+        question.criteria = restoredCriteria?.type === decisionType && restoredCriteria.snapshot === $("criteria").value
+          ? restoredCriteria.value
+          : choices.some(([, description]) => description)
+            ? Object.fromEntries(choices.map(([label, description]) => [label, description || null]))
+            : choices.map(([label]) => label);
+      } else if (decisionType === "score") {
+        question.criteria = restoredCriteria?.type === decisionType && restoredCriteria.snapshot === $("criteria").value
+          ? restoredCriteria.value
+          : $("criteria").value.split(",").map((item) => item.trim()).filter(Boolean);
+      } else if (noulCriteria) {
+        question.criteria = noulCriteria;
+      }
+      return { state, questions: { [questionId]: question } };
+    }
+
+    function parseRequest(value) {
+      const request = typeof value === "string" ? JSON.parse(value) : value;
+      if (!request || typeof request !== "object" || Array.isArray(request) || !Object.hasOwn(request, "state")) {
+        throw new Error("Request JSON needs a state value and questions object.");
+      }
+      if (!request.questions || typeof request.questions !== "object" || Array.isArray(request.questions)) {
+        throw new Error("Request JSON needs a questions object.");
+      }
+      const questions = Object.entries(request.questions);
+      if (questions.length !== 1) throw new Error("This demo accepts one question at a time.");
+      const [id, question] = questions[0];
+      if (!question || typeof question !== "object" || !["choice", "score", "noul"].includes(question.type)) {
+        throw new Error("Question type must be choice, score, or noul.");
+      }
+      if (!Object.hasOwn(question, "instructions")) throw new Error("Question instructions are required.");
+      if (question.type === "choice") {
+        const criteria = question.criteria;
+        if (Array.isArray(criteria)) {
+          if (!criteria.every((label) => typeof label === "string")) {
+            throw new Error("Choice criteria arrays must contain strings.");
+          }
+        } else if (!criteria || typeof criteria !== "object" || !Object.entries(criteria).every(([label, description]) => label && (description == null || typeof description === "string"))) {
+          throw new Error("Choice criteria must be labels or a label-to-description object.");
+        }
+      }
+      if (question.type === "score" && !Array.isArray(question.criteria)) {
+        throw new Error("Score questions need criteria as an ordered array.");
+      }
+      if (question.type === "score" && !question.criteria.every((label) => typeof label === "string")) {
+        throw new Error("Score criteria must be an ordered array of strings.");
+      }
+      if (question.type === "noul" && question.criteria != null && (typeof question.criteria !== "object" || Array.isArray(question.criteria))) {
+        throw new Error("Noul criteria must be an object when provided.");
+      }
+      if (question.type === "noul" && question.criteria && !["false", "true"].every((key) => question.criteria[key] == null || typeof question.criteria[key] === "string")) {
+        throw new Error("Noul criteria descriptions must be strings.");
+      }
+      return { state: request.state, id, question };
+    }
+
+    function applyRequestToForm({ state, id, question }) {
+      questionId = id;
+      const isJson = typeof state !== "string";
+      $("stateFormat").value = isJson ? "json" : "text";
+      $("state").value = isJson ? JSON.stringify(state, null, 2) : state;
+      setStateFormat(isJson);
+      $("question").value = typeof question.instructions === "string"
+        ? question.instructions
+        : JSON.stringify(question.instructions);
+      restoredInstructions = { value: question.instructions, snapshot: $("question").value };
+      $("decisionType").value = question.type;
+      $("decisionType").dispatchEvent(new Event("change"));
+      if (question.type === "choice") {
+        const choices = Array.isArray(question.criteria)
+          ? question.criteria.map((label) => String(label))
+          : Object.entries(question.criteria).map(([label, description]) => description ? `${label}: ${description}` : label);
+        $("criteria").value = choices.join(", ");
+        restoredCriteria = { type: question.type, value: question.criteria, snapshot: $("criteria").value };
+      } else if (question.type === "score") {
+        $("criteria").value = question.criteria.map(String).join(", ");
+        restoredCriteria = { type: question.type, value: question.criteria, snapshot: $("criteria").value };
+      } else {
+        noulCriteria = question.criteria || null;
+        restoredCriteria = null;
+      }
+    }
+
+    $("inputMode").addEventListener("change", (event) => {
+      const mode = event.target.value;
+      try {
+        if (mode === "json") {
+          $("requestJson").value = JSON.stringify(formRequest(), null, 2);
+          $("formFields").hidden = true;
+          $("requestField").hidden = false;
+        } else {
+          const request = parseRequest($("requestJson").value);
+          applyRequestToForm(request);
+          $("requestField").hidden = true;
+          $("formFields").hidden = false;
+        }
+      } catch (error) {
+        event.target.value = mode === "json" ? "form" : "json";
+        setStatus(error.message);
+      }
+    });
+
+    $("decisionForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!session || !tokenizer) return;
+
+      let request;
+      try {
+        request = $("inputMode").value === "json"
+          ? parseRequest($("requestJson").value)
+          : parseRequest(formRequest());
+      } catch (error) {
+        setStatus(error.message);
+        return;
+      }
+      const { state, question } = request;
+      const decisionType = question.type;
+      const stateText = typeof state === "string" ? state : JSON.stringify(state);
+      const instructions = typeof question.instructions === "string"
+        ? question.instructions
+        : JSON.stringify(question.instructions);
+      let criteriaLabels;
+      let optionTexts;
+      let displayLabels;
+      if (decisionType === "choice") {
+        const choices = Array.isArray(question.criteria)
+          ? question.criteria.map((label) => [label, ""])
+          : Object.entries(question.criteria);
+        criteriaLabels = choices.map(([label]) => String(label));
+        optionTexts = choices.map(([label, description]) => description ? `${label}: ${description}` : String(label));
+        displayLabels = criteriaLabels;
+      } else if (decisionType === "score") {
+        criteriaLabels = question.criteria;
+        optionTexts = criteriaLabels.map((label, index) => `level ${index}: ${label}`);
+        displayLabels = criteriaLabels;
+      } else {
+        const criteria = question.criteria || {};
+        optionTexts = [
+          `false: ${criteria.false || "no, the statement does not hold"}`,
+          `true: ${criteria.true || "yes, the statement holds"}`,
+        ];
+        criteriaLabels = ["false", "true"];
+        displayLabels = ["No", "Yes"];
+      }
+      if (criteriaLabels.length < 2 || criteriaLabels.length > 6) {
+        setStatus("Enter between 2 and 6 choices or score levels.");
+        return;
+      }
+
+      const runButton = $("analyzeButton");
+      runButton.disabled = true;
+      setStatus("Scoring…");
+      try {
+        const encode = (text) => Array.from(tokenizer(text, { add_special_tokens: false }).input_ids.data, Number);
+        let questionIds = encode(`${decisionType} question: ${instructions}`.replaceAll("[MASK]", " "));
+        let optionIds = optionTexts.map((text) => [MASK, ...encode(` ${text.replaceAll("[MASK]", " ")}`).slice(0, 48)]);
+        let headBudget = 192 - optionIds.reduce((sum, option) => sum + option.length, 0);
+        if (headBudget < 16) {
+          const perOption = Math.max(4, Math.floor((192 - 16) / optionIds.length));
+          optionIds = optionIds.map((option) => option.slice(0, perOption));
+          headBudget = 192 - optionIds.reduce((sum, option) => sum + option.length, 0);
+        }
+        questionIds = questionIds.slice(0, Math.max(8, headBudget));
+        const stateIds = encode(stateText.replaceAll("[MASK]", " ")).slice(0, 256);
+        const inputIds = [CLS, ...questionIds, SEP];
+        const markerPositions = [];
+        for (const option of optionIds) {
+          markerPositions.push(inputIds.length);
+          inputIds.push(...option);
+        }
+        inputIds.push(SEP, ...stateIds, SEP);
+
+        const int64 = (values) => BigInt64Array.from(values, (value) => BigInt(value));
+        const feeds = {
+          input_ids: new window.ort.Tensor("int64", int64(inputIds), [1, inputIds.length]),
+          attention_mask: new window.ort.Tensor("int64", int64(inputIds.map(() => 1)), [1, inputIds.length]),
+          marker_pos: new window.ort.Tensor("int64", int64(markerPositions), [1, markerPositions.length]),
+          marker_mask: new window.ort.Tensor("bool", new Uint8Array(optionIds.length).fill(1), [1, optionIds.length]),
+          qtype: new window.ort.Tensor("int64", int64([{ choice: 0, score: 1, noul: 2 }[decisionType]]), [1]),
+        };
+        const started = performance.now();
+        const outputs = await session.run(feeds);
+        const logits = Array.from(outputs[session.outputNames[0]].data, Number).slice(0, optionIds.length);
+        const max = Math.max(...logits);
+        const exps = logits.map((value) => Math.exp(value - max));
+        const total = exps.reduce((sum, value) => sum + value, 0);
+        const probabilities = exps.map((value) => value / total);
+        const distribution = displayLabels.map((label, index) => ({ label, probability: probabilities[index] }));
+        if (decisionType === "choice") distribution.sort((a, b) => b.probability - a.probability);
+        const elapsed = Math.round(performance.now() - started);
+
+        if (decisionType === "score") {
+          const expected = probabilities.reduce((sum, probability, index) => sum + probability * index, 0);
+          $("winner").textContent = `${expected.toFixed(2)} / ${criteriaLabels.length - 1}`;
+          $("timing").textContent = `${elapsed} ms · expected score`;
+        } else if (decisionType === "noul") {
+          $("winner").textContent = probabilities[1] >= 0.5 ? "Yes" : "No";
+          $("timing").textContent = `${elapsed} ms · P(true) ${(probabilities[1] * 100).toFixed(1)}%`;
+        } else {
+          $("winner").textContent = distribution[0].label;
+          $("timing").textContent = `${elapsed} ms · top choice`;
+        }
+        $("scores").replaceChildren(...distribution.map(({ label, probability }) => {
+          const row = document.createElement("div");
+          row.className = "option";
+          const name = document.createElement("span");
+          name.textContent = label;
+          const bar = document.createElement("span");
+          bar.className = "bar";
+          const fill = document.createElement("i");
+          fill.style.width = `${(probability * 100).toFixed(1)}%`;
+          bar.append(fill);
+          const value = document.createElement("b");
+          value.textContent = `${(probability * 100).toFixed(1)}%`;
+          row.append(name, bar, value);
+          return row;
+        }));
+        $("result").classList.add("visible");
+        setStatus("Scored locally. Probabilities may need calibration for your use case.");
+      } catch (error) {
+        console.error(error);
+        setStatus(error.message || "Inference failed. Check the input and try again.");
+      } finally {
+        runButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

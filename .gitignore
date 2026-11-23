@@ -1,5 +1,6 @@
 # Rust
 /target/
+wasm/target/
 **/*.rs.bk
 *.pdb
 
@@ -11,11 +12,19 @@ index.node
 # Node / Bun
 node_modules/
 bun.lockb
+bun.lock
 .npm/
+
+# Compiled JS library + staged native prebuilds (produced by `bun run build`)
+dist/
+prebuilds/
+examples/browser/pkg/
+examples/browser/pkg-node/
 
 # Test artifacts
 /tmp/
 *.safetensors
+*.tgz
 
 # Editor / OS
 .vscode/

@@ -93,6 +93,11 @@ export class Tensor {
     return new Float32Array(native.tensorToF32(this._handle).data);
   }
 
+  /** The data as a `Uint32Array`, e.g. for token id tensors. */
+  toUint32Array(): Uint32Array {
+    return new Uint32Array(native.tensorToU32(this._handle).data);
+  }
+
   /**
    * The data as nested JS arrays matching {@link Tensor.shape}.
    * @example `candle.eye(2).tolist() // [[1, 0], [0, 1]]`

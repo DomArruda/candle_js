@@ -1,22 +1,42 @@
 # candle_js
 
+[![CI](https://github.com/DomArruda/candle_js/actions/workflows/ci.yml/badge.svg)](https://github.com/DomArruda/candle_js/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![status: WIP](https://img.shields.io/badge/status-WIP-orange)
 
 Neon bindings exposing [candle](https://github.com/huggingface/candle) —
 Hugging Face's Rust ML framework — to JavaScript. Tensors, autograd, layers,
 and optimizers, callable from Bun or Node.
 
-It comes in two layers: a documented, PyTorch-like TypeScript library in `lib/`,
-and the thin native addon (`index.node`) underneath it. Train a small network
-in TypeScript, save it as safetensors, load it back. Everything documented
-below works and is covered by tests.
+It comes in three layers: the thin native addon (`index.node`), a documented,
+PyTorch-like TypeScript library in `lib/`, and a high-level `model.fit` API on
+top. Train a small network in TypeScript, save it as safetensors, load it back.
+Everything documented below works and is covered by tests.
 
 **Status: WIP.** The API is still moving and may break at any time, so pin a commit if you build on it.
 
+Source, issues and releases: [github.com/DomArruda/candle_js](https://github.com/DomArruda/candle_js).
+
 ## Install
 
-No prebuilt binaries yet — build from source (two commands, see
-[Build](#build)). Requires a Rust toolchain.
+```bash
+npm install candle_js     # or: bun add candle_js
+```
+
+```ts
+import candle from "candle_js";
+
+const a = candle.tensor([[1, 2], [3, 4]]);
+a.matmul(candle.ones([2, 2])).tolist(); // [[3, 3], [7, 7]]
+```
+
+Both module systems work: `import` resolves to the ESM entry (`index.mjs`) and
+`require` to the CommonJS build (`dist/index.js`). Both expose the same API,
+including `candle.nn.functional`.
+
+The published tarball ships prebuilt native addons for Linux, macOS and
+Windows, so no Rust toolchain is required. It is not on npm yet — see
+[Publishing](#publishing).
 
 ## Why
 
@@ -28,26 +48,34 @@ The existing options solve different problems:
 transformer inference via ONNX Runtime, and
 [TensorFlow.js](https://github.com/tensorflow/tfjs) is a full framework
 (last npm release 4.22.0, ~2 years ago). This one sits lower: raw tensors,
-autograd, and training, with candle doing the math in Rust.
+autograd, and training, with candle doing the math in Rust. [Performance](#performance)
+includes a same-runtime comparison against TensorFlow.js.
 
-## Build
+## Build from source
 
-
-Currently only build from source is supported (for now)
+Requires a Rust toolchain and [Bun](https://bun.sh) (for the test suite):
 
 ```bash
-cargo build --release
-cp target/release/libcandle_js.so index.node   # .dylib on macOS
+bun install
+bun run build     # cargo build --release + stage prebuilds/ and index.node
+bun test
+bun run examples    # run the 16 example scripts
+bun run bench:tfjs  # optional: TensorFlow.js comparison
+bun run pyodide     # optional: Python calling candle_js
 ```
 
-The `.node` file is gitignored — build it locally.
+`bun run build` runs `scripts/copy-native.mjs`, which copies the cdylib to
+`prebuilds/<platform>-<arch>/candle_js.node` and to `index.node` for local dev.
+Both are gitignored.
 
 ## Usage
 
-The package has two layers:
+The package has three layers:
 
-- **`lib/` — the library (recommended).** Import the default export as
-  `candle`. Tensors have methods, layers are `nn.Module`s, optimizers take
+- **High-level API.** `model.fit`, `model.evaluate`, `model.predict` and
+  `candle.trainTestSplit` cover the common supervised workflow.
+- **`lib/` — the tensor library.** Import the default export as `candle`.
+  Tensors have methods, layers are `nn.Module`s, optimizers take
   `model.parameters()`, and every public symbol carries a JSDoc string plus
   TypeScript types.
 - **`index.node` — the native addon.** The thin Neon FFI over candle that the
@@ -132,6 +160,46 @@ Functional ops and losses live on `candle.nn.functional` (aliased as `candle.F`)
 The full library API is documented with JSDoc in `lib/`; your editor shows it
 on hover.
 
+#### High-level training
+
+When you don't need a custom loop, `model.fit` handles batching, shuffling,
+validation, metrics, callbacks and history. Loss and metrics are inferred from
+the target: class ids (`Uint32Array` / `number[]`) mean cross-entropy and
+accuracy; tensor targets mean MSE.
+
+```ts
+import candle from "candle_js";
+
+const model = new candle.nn.Sequential(
+  new candle.nn.Linear(2, 16),
+  new candle.nn.GELU(),
+  new candle.nn.Linear(16, 2),
+);
+const { train, test } = candle.trainTestSplit(
+  { x: X, y: labels },
+  { testSize: 0.2, seed: 1 },
+);
+
+const history = model.fit(train, {
+  epochs: 20,
+  batchSize: 32,
+  validationSplit: 0.2,
+  optimizer: new candle.optim.AdamW(model.parameters(), { lr: 0.05 }),
+  onEpochEnd: (epoch, logs) =>
+    console.log(epoch, logs.loss, logs.valAccuracy),
+});
+
+model.evaluate(test, { metrics: ["accuracy"] }); // { loss, accuracy }
+model.predict(X);                                // detached Tensor
+candle.predictClasses(model, X);                 // number[]
+model.numParameters;
+```
+
+Also available as `candle.fit(model, data, config)` and `candle.hl.*`.
+Custom losses use `loss: (pred, target) => ...`; metrics can be `"accuracy"`,
+`"mse"`, `"mae"` or a mix. See `tests/highlevel.test.ts` and
+`examples/05-highlevel.ts`.
+
 #### Operator-style expressions
 
 JavaScript can't overload `+` or `@` on objects (no `Symbol` hook can return a
@@ -149,7 +217,31 @@ const p = expr`2 * ${x} ^ 3`;          // x.powf(3).mul(2)
 
 #### Examples
 
-Runnable, tested examples live in `tests/`:
+Runnable scripts live in [`examples/`](examples/) — `bun run examples` runs all
+16 and reports failures:
+
+| File | Shows |
+| --- | --- |
+| `examples/01-tensors.ts` | creation, shape, matmul, reductions, readback |
+| `examples/02-autograd.ts` | gradients with `backward()` and `GradStore` |
+| `examples/03-regression.ts` | manual loop fitting `sin` |
+| `examples/04-classification.ts` | two-blob classification |
+| `examples/05-highlevel.ts` | `fit`, validation, `evaluate`, `predict` |
+| `examples/06-xor.ts` | XOR with the high-level API |
+| `examples/07-lstm.ts` | LSTM running-sum regression |
+| `examples/08-transformer.ts` | causal self-attention overfitting a sequence |
+| `examples/09-autoencoder.ts` | linear autoencoder on low-rank data |
+| `examples/10-text.ts` | embedding-bag text classification |
+| `examples/11-rl-bandit.ts` | REINFORCE contextual bandit |
+| `examples/12-rl-gridworld.ts` | REINFORCE tabular gridworld |
+| `examples/13-expr.ts` | the `expr` operator DSL |
+| `examples/14-save-load.ts` | safetensors round-trip |
+| `examples/15-benchmark.ts` | matmul and elementwise timings |
+| `examples/16-raw-native.ts` | the low-level native addon |
+| `examples/browser/` | WASM build + JS/Pyodide browser demo |
+| `examples/pyodide/` | Python calling candle_js through Pyodide |
+
+The test suite doubles as example code:
 
 | File | Shows |
 | --- | --- |
@@ -157,9 +249,190 @@ Runnable, tested examples live in `tests/`:
 | `examples_lstm.test.ts` | `LSTM` running-sum regression and sequence classification |
 | `examples_transformer.test.ts` | stacked bidirectional transformer blocks for classification |
 | `examples_autoencoder.test.ts` | linear autoencoder + embedding-bag text classifier |
+| `examples_rl.test.ts` | REINFORCE policy gradient on a contextual bandit |
 | `library.test.ts` | tensor/autograd tour and a one-block GPT overfitting a sequence |
 | `expr.test.ts` | the `expr` operator DSL |
 | `benchmark.test.ts` | matmul GFLOP/s, op latency, model throughput |
+
+### Recipes
+
+Short, copy-paste patterns. Every recipe below is exercised by a test under
+`tests/`; run `bun test` after adapting them.
+
+#### Train with `model.fit`
+
+```ts
+const { train, test } = candle.trainTestSplit(
+  { x: X, y: labels },
+  { testSize: 0.2, seed: 1 },
+);
+const history = model.fit(train, {
+  epochs: 20,
+  batchSize: 32,
+  validationSplit: 0.2,
+});
+const logs = model.evaluate(test, { metrics: ["accuracy"] });
+console.log(history.valLoss.at(-1), logs.accuracy);
+```
+
+Tested in `tests/highlevel.test.ts`.
+
+#### Fit a regression model
+
+```ts
+const X = candle.tensor(xs, [n, 1]);
+const Y = candle.tensor(ys, [n, 1]);
+
+const model = new candle.nn.Sequential(
+  new candle.nn.Linear(1, 32),
+  new candle.nn.Tanh(),
+  new candle.nn.Linear(32, 1),
+);
+const opt = new candle.optim.AdamW(model.parameters(), { lr: 0.01 });
+
+for (let step = 0; step < 600; step++) {
+  opt.step(candle.F.mseLoss(model.forward(X), Y).backward());
+}
+```
+
+Tested in `tests/examples_mlp.test.ts` (fits `sin` to MSE < 0.01).
+
+#### Work with raw parameters
+
+`Module` is optional. Create `Var`s, build the loss with functional ops, inspect
+gradients if you want, then hand them to an optimizer:
+
+```ts
+const w = candle.variable([0], [1, 1]);
+const b = candle.variable([0], [1]);
+const opt = new candle.optim.AdamW([w, b], { lr: 0.1 });
+
+const grads = candle.F.mseLoss(candle.F.linear(X, w, b), Y).backward();
+grads.get(w); // dL/dw, shape [1, 1]
+opt.step(grads);
+
+// ... repeat to convergence: y = 2x + 1 recovers w ~ 2, b ~ 1.
+```
+
+Tested in `tests/recipes.test.ts`.
+
+#### Share a trunk between two heads
+
+One encoder, two task heads, a single backward pass:
+
+```ts
+class MultiTask extends candle.nn.Module {
+  trunk = this.addModule(
+    new candle.nn.Sequential(
+      new candle.nn.Linear(2, 16),
+      new candle.nn.Tanh(),
+    ),
+  );
+  sum = this.addModule(new candle.nn.Linear(16, 1));
+  diff = this.addModule(new candle.nn.Linear(16, 1));
+
+  protected _forward(x: Tensor): Tensor {
+    const h = this.trunk.forward(x);
+    return candle.cat([this.sum.forward(h), this.diff.forward(h)], 1);
+  }
+}
+
+const model = new MultiTask();
+const opt = new candle.optim.AdamW(model.parameters(), { lr: 0.02 });
+opt.step(candle.F.mseLoss(model.forward(X), Y).backward()); // Y: [n, 2]
+```
+
+Tested in `tests/recipes.test.ts`.
+
+#### Save and resume training
+
+```ts
+model.save("model.safetensors");
+
+const restored = new MLP();
+restored.load("model.safetensors");
+restored.eval();
+restored.forward(X); // same outputs as model
+
+// Optimizer state is not stored in safetensors; start a fresh optimizer.
+const opt = new candle.optim.AdamW(restored.parameters(), { lr: 0.02 });
+```
+
+Files are plain safetensors, so other runtimes can read the weights too.
+Tested in `tests/recipes.test.ts`.
+
+#### Policy gradient (RL)
+
+There is no separate RL API: REINFORCE is ordinary autograd over
+`-log π(a|x) * reward`. A policy is a normal `Module`; `logSoftmax` gives the
+action log-probabilities; `backward` does the rest.
+
+```ts
+import candle, { Tensor } from "candle_js";
+
+// A contextual bandit: four one-hot contexts, three arms, a hidden best arm.
+const BEST = [2, 0, 1, 2];
+const contexts = Array.from({ length: 64 }, (_, i) => Math.floor(i / 16));
+const best = contexts.map((c) => BEST[c]);
+const X = candle.tensor(
+  contexts.flatMap((c) => [0, 1, 2, 3].map((k) => (k === c ? 1 : 0))),
+  [64, 4],
+);
+
+class Policy extends candle.nn.Module {
+  l1 = this.addModule(new candle.nn.Linear(4, 16));
+  l2 = this.addModule(new candle.nn.Linear(16, 3));
+
+  protected _forward(x: Tensor): Tensor {
+    return this.l2.forward(this.l1.forward(x).tanh());
+  }
+}
+
+const model = new Policy();
+const opt = new candle.optim.AdamW(model.parameters(), { lr: 0.05 });
+const sample = (p: number[]): number => {
+  let r = Math.random();
+  for (let a = 0; a < p.length; a++) if ((r -= p[a]) <= 0) return a;
+  return p.length - 1;
+};
+
+for (let step = 0; step < 300; step++) {
+  const logp = model.forward(X).logSoftmax(1); // [batch, arms]
+  const probs = logp.toArray().map(Math.exp);
+  const actions = Array.from({ length: 64 }, (_, i) =>
+    sample(probs.slice(i * 3, i * 3 + 3)),
+  );
+  const rewards = actions.map((a, i) => (a === best[i] ? 1 : -1));
+
+  const mask = new Float32Array(64 * 3);
+  actions.forEach((a, i) => (mask[i * 3 + a] = 1));
+
+  const loss = logp
+    .mul(candle.tensor(mask, [64, 3]))
+    .sum(1)
+    .mul(candle.tensor(rewards))
+    .meanAll()
+    .neg();
+  opt.step(loss.backward());
+}
+
+model.forward(X).argmax(1).to("f32").toArray(); // [2, 0, 1, 2]
+```
+
+Tested in `tests/examples_rl.test.ts`: 300 steps (~0.3 s) reach 100% greedy
+accuracy on all four contexts. Run it with
+`bun test tests/examples_rl.test.ts`.
+
+#### Infix math with `expr`
+
+```ts
+import { expr } from "candle_js";
+
+const z = expr`${a} @ ${b} + ${c}`;       // a.matmul(b).add(c)
+const y = expr`2 * ${x} ^ 3`;             // x.powf(3).mul(2)
+```
+
+Tested in `tests/expr.test.ts`.
 
 ### Low-level native API
 
@@ -273,6 +546,40 @@ for (let i = 0; i < 500; i++) {
 
 `tests/candle_transformer.test.ts` is the full, runnable version.
 
+## Browser, WASM and Pyodide
+
+`candle-core` compiles to `wasm32-unknown-unknown`, so the same math can run in a
+browser. [`examples/browser/`](examples/browser/) builds a small module exposing
+`matmul` and a 300-step XOR training run, then calls it from JavaScript and from
+Python in Pyodide:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130
+bash examples/browser/build.sh
+python3 -m http.server -d examples/browser 8080
+```
+
+`bun run wasm` builds the web + Node bindings and smoke-tests both, including
+the Pyodide bridge. The generated `examples/browser/pkg*` directories are
+gitignored. `.github/workflows/pages.yml` builds and deploys `examples/browser`
+to GitHub Pages on `main`.
+
+Pyodide also runs on Node against the real native addon:
+
+```bash
+bun run build:js
+bun run pyodide
+```
+
+See [`examples/pyodide/`](examples/pyodide/) for the Python side.
+
+**WebGPU:** candle does not currently ship a WebGPU backend. Its devices are
+CPU, CUDA, Metal and WASM/CPU. WebGPU is an open upstream request
+([candle#344](https://github.com/huggingface/candle/issues/344)); the browser
+demo detects `navigator.gpu` but runs on WASM CPU. A real WebGPU backend would
+be a candle upstream project, not a binding change here.
+
 ## Native API
 
 The `lib/` wrapper is the recommended interface; this section lists the raw
@@ -343,10 +650,13 @@ else that reads the format.
 
 Works today: tensor ops, full autograd, Linear, Embedding, LSTM, LayerNorm,
 RMSNorm and Dropout layers, a full activation zoo, MSE, cross-entropy, NLL, BCE
-and Huber losses, SGD and AdamW, safetensors save/load and inspection, and
-enough primitives to build transformers in JS. CPU only.
+and Huber losses, SGD and AdamW, safetensors save/load and inspection, a
+high-level `fit` / `evaluate` / `predict` API, enough primitives to build
+transformers and policy-gradient agents in JS, and a WASM/CPU browser build.
+CPU only (WASM included).
 
-Not here yet: a bundled transformer architecture, tokenizers, GPU, and a
+Not here yet: a WebGPU backend (blocked on candle upstream), a bundled
+transformer architecture, tokenizers, CUDA/Metal access from JS, and a
 seedable CPU RNG (candle only supports `set_seed` on CUDA/Metal). See
 [Roadmap](#roadmap).
 
@@ -376,19 +686,52 @@ end-to-end 16->32->1, batch 128: ~1.1 ms/step (~900 steps/s)
 Small sizes are overhead-dominated; large matmuls reach candle's threaded
 `gemm`. To see them, run `bun run bench` (or `bun test tests/benchmark.test.ts`).
 
+### candle_js vs TensorFlow.js
+
+`bun run bench:tfjs` runs the same operations through candle_js and
+`@tensorflow/tfjs` 4.22.0 on the same runtime and CPU. TF.js here is the
+pure-JS CPU backend, not the native `@tensorflow/tfjs-node` binding. On this
+machine (Linux x64, Bun 1.3.14):
+
+| Case | candle_js | TF.js | Speedup |
+| --- | ---: | ---: | ---: |
+| matmul 128³ | 1.28 ms | 1.90 ms | 1.5x |
+| matmul 256³ | 1.54 ms | 14.17 ms | 9.2x |
+| matmul 512³ | 1.90 ms | 124.52 ms | 65.6x |
+| add 65k | 0.19 ms | 0.33 ms | 1.7x |
+| softmax [256, 256] | 0.34 ms | 8.03 ms | 23.6x |
+| MLP forward [64, 64] | 1.47 ms | 1.93 ms | 1.3x |
+| train step [128, 16] → 1 | 0.91 ms | 3.50 ms | 3.9x |
+
+The gap is largest where candle calls Rust kernels in a loop (matmul, softmax)
+and smallest for elementwise ops and the small MLP, where both sides are
+dominated by per-op JS overhead. The native `@tensorflow/tfjs-node` backend
+would be a closer fight for the large kernels; it is not included here because
+it needs platform-specific binaries. The script takes the best of three timed
+rounds per case. Re-run on your machine with `bun run bench:tfjs`; install dev
+dependencies first (`bun install`). Numbers move with CPU and thread count.
+
 ## Roadmap
 
 - [x] TypeScript declarations / JSDoc (via the `lib/` wrapper)
-- [x] Example suite: MLP (regression/classification), LSTM, transformer,
-      autoencoder, text classifier, benchmarks
-- [ ] Prebuilt binaries / npm package (currently source-only)
-- [ ] Browser / WASM build (and a CDN-friendly bundle)
+- [x] High-level API: `model.fit`, `evaluate`, `predict`, `trainTestSplit`
+- [x] Example suite: 16 runnable scripts in `examples/` plus the test suite
+- [x] MLP, LSTM, transformer, autoencoder, text classifier, REINFORCE RL
+- [x] Benchmark against TensorFlow.js (`bun run bench:tfjs`)
+- [x] npm packaging: `dist/` build, prebuilt-addon loader, CI/release workflows
+- [x] README recipes, tested end to end
+- [x] Browser / WASM build and demo (`bun run wasm`)
+- [x] Pyodide bridge: Node demo + browser demo calling WASM
+- [ ] Publish to npm (needs an account + `NPM_TOKEN`)
+- [ ] WebGPU backend — blocked on candle upstream
+      ([candle#344](https://github.com/huggingface/candle/issues/344)); candle
+      currently exposes CPU, CUDA, Metal and WASM/CPU
 - [ ] Transformer loading via `candle-transformers` — needs a tokenizer and
       some config handling to be worth claiming
 - [ ] Tokenizers (`tokenizers` crate)
 - [ ] More layers: Conv, BatchNorm, GRU
 - [ ] Async ops via `neon::task`
-- [ ] macOS build
+- [x] macOS build (x64 + arm64 prebuilds)
 
 ## Tests
 
@@ -396,10 +739,53 @@ Small sizes are overhead-dominated; large matmuls reach candle's threaded
 bun test
 ```
 
-93 tests across 13 files. The `candle_*` files exercise the native exports;
+105 tests across 17 files. The `candle_*` files exercise the native exports;
 `library.test.ts` and `examples_*` exercise the `lib/` wrapper end to end —
-regression, classification, LSTM, transformer and autoencoder models, all
-trained to convergence. `benchmark.test.ts` reports timings. Gradients are
-checked numerically (d/dx x² at x=3 is 6; ∂/∂w Σ(w·x) is x), not just for
-shape. Save/load asserts identical model output after a round-trip.
+regression, classification, LSTM, transformer, autoencoder and REINFORCE
+models, all trained to convergence. `highlevel.test.ts` covers `fit`,
+validation, metrics and `trainTestSplit`; `recipes.test.ts` runs the README
+recipes (raw variables, shared trunk, resume), and `package.test.ts` guards the
+npm entry points. `benchmark.test.ts` reports timings. Gradients are checked
+numerically (d/dx x² at x=3 is 6; ∂/∂w Σ(w·x) is x), not just for shape.
+Save/load asserts identical model output after a round-trip. The WASM build is
+smoke-tested in CI on its own (`bun run wasm`).
+
+## Publishing
+
+The npm tarball contains the compiled library (`dist/`), the ESM wrapper
+(`index.mjs`), prebuilt addons
+(`prebuilds/<platform>-<arch>/candle_js.node`), `README.md` and `LICENSE`.
+`.github/workflows/ci.yml` tests on Linux/macOS/Windows and smoke-tests the
+compiled package on both Bun and Node; `release.yml` builds one prebuild per
+platform and publishes on a `v*` tag with npm provenance.
+
+Local dry run:
+
+```bash
+bun install
+bun run build        # native -> prebuilds/ + index.node
+bun run build:js     # TypeScript -> dist/ (JS + .d.ts)
+bun run smoke        # load the ESM and CJS entries
+bun pm pack --ignore-scripts  # inspect the tarball
+```
+
+You need an npm account; CI needs an `NPM_TOKEN` repo secret. Scoped names
+(`@you/candle_js`) also need `--access public`. At runtime `lib/native.ts`
+tries `index.node` first (local dev), then
+`prebuilds/<platform>-<arch>/candle_js.node` (published package).
+
+First publish:
+
+1. Push the repo to GitHub and enable Actions.
+2. Add an automation token from npm as the `NPM_TOKEN` repository secret.
+3. `git tag v0.1.0 && git push origin v0.1.0` — `release.yml` builds every
+   prebuild, runs the tests against them, and publishes with npm provenance.
+
+Repository, homepage and issue URLs are already set in `package.json`, and the
+tarball ships `LICENSE` and the ESM entry (`index.mjs`).
+
+When working inside WSL, use Bun's `bun pm pack` or Linux npm. If `npm` resolves
+to `/mnt/c/Program Files/nodejs/npm`, that's Windows npm being invoked from WSL;
+its UNC path handling can produce an invalid doubled `Ubuntu` path. Install a
+Linux Node/npm toolchain in WSL if you specifically need to run `npm pack` there.
 

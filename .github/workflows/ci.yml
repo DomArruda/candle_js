@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS deps
+        run: bun install
+
+      - name: Build native addon
+        run: cargo build --release
+
+      - name: Stage addon
+        run: bun scripts/copy-native.mjs
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build library
+        run: bun run build:js
+
+      - name: Smoke test packaged library (Bun)
+        run: bun run smoke
+
+      - name: Smoke test packaged library (Node)
+        run: node scripts/smoke.mjs
+
+      - name: Benchmark vs TensorFlow.js
+        if: runner.os == 'Linux'
+        run: bun run bench:tfjs
+
+      - name: Test
+        run: bun test
+
+      - name: Run examples
+        if: runner.os == 'Linux'
+        run: bun run examples
+
+      - name: Pyodide demo (native)
+        if: runner.os == 'Linux'
+        run: bun run pyodide
+
+  wasm:
+    name: wasm build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.130
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS deps
+        run: bun install
+
+      - name: Build browser/Node wasm
+        run: bash examples/browser/build.sh
+
+      - name: Smoke test wasm
+        run: node examples/browser/smoke.mjs
+
+      - name: Smoke test wasm through Pyodide
+        run: node examples/browser/pyodide-smoke.mjs

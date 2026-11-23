@@ -41,6 +41,7 @@
 
 import * as factory from "./factory";
 import * as F from "./ops";
+import * as highlevel from "./highlevel";
 import * as nn from "./nn";
 import * as optim from "./optim";
 import { expr } from "./expr";
@@ -53,22 +54,33 @@ export { VarMap } from "./varmap";
 export { expr } from "./expr";
 export type { ExprOperand } from "./expr";
 export * from "./factory";
+export * from "./highlevel";
 export * from "./nn";
 export * from "./optim";
 export * from "./ops";
+
+const nnNamespace = { ...nn, functional: F };
+
+/** Namespaces, also reachable through the default `candle` export. */
+export { nnNamespace as nn, optim };
+
+/** High-level training helpers, also reachable through the default `candle` export. */
+export { highlevel as hl };
 
 /** Functional ops, also available as `candle.nn.functional`. */
 export { F };
 
 /**
  * The `candle` namespace: creation functions at the top level, plus `nn`,
- * `optim` and `functional` sub-namespaces.
+ * `optim`, `hl` and `functional` sub-namespaces.
  */
 const candle = {
   ...factory,
+  ...highlevel,
   F,
   expr,
-  nn: { ...nn, functional: F },
+  hl: highlevel,
+  nn: nnNamespace,
   optim,
   Tensor,
   Var,

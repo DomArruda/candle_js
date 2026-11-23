@@ -2,34 +2,64 @@
   "name": "candle_js",
   "version": "0.1.0",
   "description": "PyTorch-like neural networks in JavaScript/TypeScript, backed by candle in Rust.",
-  "main": "lib/index.ts",
-  "types": "lib/index.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DomArruda/candle_js.git"
+  },
+  "homepage": "https://github.com/DomArruda/candle_js#readme",
+  "bugs": "https://github.com/DomArruda/candle_js/issues",
+  "author": "Dom Arruda",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.ts",
-      "import": "./lib/index.ts",
-      "require": "./lib/index.ts"
-    }
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./index.mjs",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "index.node",
-    "src",
-    "Cargo.toml",
-    "Cargo.lock",
+    "dist",
+    "index.mjs",
+    "prebuilds",
+    "LICENSE",
     "README.md"
   ],
+  "sideEffects": false,
   "scripts": {
     "test": "bun test",
     "bench": "bun test tests/benchmark.test.ts",
-    "build": "cargo build --release && cp target/release/libcandle_js.so index.node",
+    "bench:tfjs": "bun scripts/bench-vs-tfjs.ts",
+    "examples": "bun scripts/run-examples.ts",
+    "pyodide": "node examples/pyodide/demo.mjs",
+    "wasm": "bash examples/browser/build.sh && node examples/browser/smoke.mjs && node examples/browser/pyodide-smoke.mjs",
+    "build": "cargo build --release && bun scripts/copy-native.mjs",
+    "build:js": "tsc -p tsconfig.build.json",
+    "prepack": "tsc -p tsconfig.build.json",
+    "smoke": "bun scripts/smoke.mjs",
     "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
+    "pyodide": "^0.26.4",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "keywords": [
     "tensor",
     "autograd",
     "neural-network",
     "transformer",
+    "lstm",
+    "reinforcement-learning",
+    "policy-gradient",
     "candle",
     "rust",
     "wasm"

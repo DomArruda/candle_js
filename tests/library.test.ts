@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import candle, { Tensor } from "../lib/index";
+import candle, { F, Tensor, nn, optim } from "../lib/index";
 
 describe("library: tensors", () => {
   test("creation and readback", () => {
@@ -52,6 +52,13 @@ describe("library: tensors", () => {
     expect(a.softmax(1).sum(1).toArray()[0]).toBeCloseTo(1, 5);
   });
 
+  test("u32 tensors read back and feed Embedding", () => {
+    const ids = candle.fromU32([1, 0, 2], [3]);
+    expect(ids.toUint32Array()).toEqual(new Uint32Array([1, 0, 2]));
+    const emb = new candle.nn.Embedding(4, 3);
+    expect(emb.forward(ids).shape).toEqual([3, 3]);
+  });
+
   test("functional ops and losses", () => {
     const x = candle.tensor([1, 2, 3], [1, 3]);
     expect(candle.F.softmax(x, 1).sum(1).item()).toBeCloseTo(1, 5);
@@ -71,6 +78,21 @@ describe("library: tensors", () => {
     const g = w.mul(w).backward().get(w);
     expect(g.item()).toBeCloseTo(6, 4);
     expect(w.data.item()).toBeCloseTo(3, 5);
+  });
+});
+
+describe("library: exports", () => {
+  test("default namespaces and named exports line up", () => {
+    expect(candle.F).toBe(candle.nn.functional);
+    expect(candle.Tensor).toBe(Tensor);
+    expect(nn.functional).toBe(F);
+    expect(nn.Linear).toBe(candle.nn.Linear);
+    expect(optim.AdamW).toBe(candle.optim.AdamW);
+    expect(typeof candle.Var).toBe("function");
+    expect(typeof candle.optim.AdamW).toBe("function");
+    expect(typeof candle.optim.SGD).toBe("function");
+    expect(typeof candle.nn.Linear).toBe("function");
+    expect(typeof candle.expr).toBe("function");
   });
 });
 
@@ -204,6 +226,7 @@ describe("library: transformer", () => {
     }
   }
 
+  
   test("MiniGPT overfits a sequence", () => {
     const model = new MiniGPT();
     const opt = new candle.optim.AdamW(model.parameters(), { lr: 0.01 });
